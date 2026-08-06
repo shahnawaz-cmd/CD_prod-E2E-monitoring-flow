@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: ['Mobile Safari (iOS 18)', 'Desktop Chrome', 'Mobile Chrome (Android)']
+        project: ['Mobile Safari', 'Desktop Chrome', 'Mobile Chrome']
 
     env:
       CI: true
@@ -57,7 +57,7 @@ jobs:
       - name: Execute Playwright Matrix Project Tests (Continue On Error)
         id: playwright-test
         continue-on-error: true
-        run: npx playwright test --project="${{ matrix.project }}" --reporter=blob
+        run: npx playwright test --project="${{ matrix.project }}" --reporter=blob,list
 
       - name: Upload Blob Report Artifact
         uses: actions/upload-artifact@v4

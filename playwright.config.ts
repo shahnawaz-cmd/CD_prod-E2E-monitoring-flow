@@ -18,7 +18,7 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'Mobile Safari (iOS 18)',
+      name: 'Mobile Safari',
       use: {
         ...devices['iPhone 15 Pro Max'],
         userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
@@ -31,7 +31,7 @@ export default defineConfig({
       },
     },
     {
-      name: 'Mobile Chrome (Android)',
+      name: 'Mobile Chrome',
       use: {
         ...devices['Pixel 7'],
       },
