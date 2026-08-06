@@ -179,15 +179,17 @@ export class PreviewVehicleDetail implements Task {
     const dynamicText = await vehicleHeader.innerText().catch(() => 'Vehicle Details');
     console.log(`[PreviewVehicleDetail] Dynamically captured preview header: "${dynamicText}"`);
 
-    // Extract snippet of page body text for logging and verification
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    console.log(`\n--- [PreviewVehicleDetail] Captured Details Snippet ---\n`);
-    console.log(bodyText.slice(0, 1000));
-    console.log(`\n-------------------------------------------------------\n`);
+    // Extract snippet of page body text safely with catch handler
+    const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+    if (bodyText) {
+      console.log(`\n--- [PreviewVehicleDetail] Captured Details Snippet ---\n`);
+      console.log(bodyText.slice(0, 1000));
+      console.log(`\n-------------------------------------------------------\n`);
+    }
   }
 }
 
-// Task 5: Safari-specific unmapped vehicle selection flow
+// Task 5: Safari-specific unmapped vehicle selection flow using robust wait + JS evaluate click
 export class SafariSelectVehicleSpecs implements Task {
   constructor(private readonly specs: VehicleSpecs) {}
 
@@ -200,78 +202,110 @@ export class SafariSelectVehicleSpecs implements Task {
       version = 'Business Coupe'
     } = this.specs;
 
-    console.log('[SafariSelectVehicleSpecs] Waiting for "Select Your Preferred Vehicle" screen or comboboxes...');
+    console.log('[SafariSelectVehicleSpecs] Executing Condition 1 & dropdown selection flow...');
 
-    // 1. Wait for "Select Your Preferred Vehicle" screen heading or comboboxes to be visible (up to 20s)
-    const selectionHeading = page.getByRole('heading', { name: /Select Your Preferred Vehicle/i })
-      .or(page.locator('text=/Select Your Preferred Vehicle/i'))
-      .or(page.getByRole('combobox'))
-      .first();
-
-    await selectionHeading.waitFor({ state: 'visible', timeout: 20000 }).catch(() => {
-      console.log('[SafariSelectVehicleSpecs] Selection screen / combobox wait completed.');
-    });
-
-    // 2. Click "No" button (wait explicitly up to 10s for the ownership popup)
-    const noBtn = page.getByRole('button', { name: /^No$/i })
-      .or(page.locator('button, [role="button"], label, div, span').filter({ hasText: /^No$/i }))
+    // 1. Step 1: Click "No" button on "Is this your vehicle?" pop-up (wait up to 10s)
+    console.log('[SafariSelectVehicleSpecs] Step 1: Waiting up to 10s for "No" button pop-up...');
+    const noBtn = page.getByRole('button', { name: 'No', exact: true })
+      .or(page.locator('button, [role="button"], div, span, label').filter({ hasText: /^No$/i }))
       .or(page.locator('text=/No/i'))
       .first();
 
-    console.log('[SafariSelectVehicleSpecs] Waiting for "No" ownership pop-up...');
-    if (await noBtn.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)) {
+    const isNoPresent = await noBtn.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true).catch(() => false);
+
+    if (isNoPresent) {
+      console.log('[SafariSelectVehicleSpecs] Step 1: "No" button detected! Executing click...');
       await noBtn.click({ force: true }).catch(async () => {
-        await noBtn.evaluate((el: any) => el.click()).catch(() => {});
+        await noBtn.evaluate((el: any) => (el as HTMLElement).click());
       });
-      console.log('[SafariSelectVehicleSpecs] Successfully clicked "No" button.');
+      await noBtn.evaluate((el: any) => (el as HTMLElement).click()).catch(() => {});
+      console.log('[SafariSelectVehicleSpecs] Clicked "No" button. Waiting 1.5s for Ownership screen...');
+      await page.waitForTimeout(1500);
     } else {
-      console.log('[SafariSelectVehicleSpecs] "No" pop-up not present or skipped.');
+      console.log('[SafariSelectVehicleSpecs] Step 1: "No" button pop-up not present or skipped.');
     }
 
-    // 3. Click "Owner" button (wait explicitly up to 10s for owner role popup)
-    const ownerBtn = page.getByRole('button', { name: /Owner/i })
-      .or(page.locator('button, [role="button"], label, div, span').filter({ hasText: /Owner/i }))
-      .or(page.locator('text=/Owner/i'))
+    // 2. Step 2: Click "Seller" / "Owner" button on Ownership screen (wait up to 10s)
+    console.log('[SafariSelectVehicleSpecs] Step 2: Waiting up to 10s for "Seller" / "Owner" pop-up...');
+    const sellerOrOwnerBtn = page.getByRole('button', { name: 'Seller' })
+      .or(page.getByRole('button', { name: 'Owner' }))
+      .or(page.locator('button, [role="button"], div, span, label').filter({ hasText: /Seller|Owner/i }))
       .first();
 
-    console.log('[SafariSelectVehicleSpecs] Waiting for "Owner" pop-up...');
-    if (await ownerBtn.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)) {
-      await ownerBtn.click({ force: true }).catch(async () => {
-        await ownerBtn.evaluate((el: any) => el.click()).catch(() => {});
+    const isRolePresent = await sellerOrOwnerBtn.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true).catch(() => false);
+
+    if (isRolePresent) {
+      console.log('[SafariSelectVehicleSpecs] Step 2: "Seller" / "Owner" button detected! Executing click...');
+      await sellerOrOwnerBtn.click({ force: true }).catch(async () => {
+        await sellerOrOwnerBtn.evaluate((el: any) => (el as HTMLElement).click());
       });
-      console.log('[SafariSelectVehicleSpecs] Successfully clicked "Owner" button.');
+      await sellerOrOwnerBtn.evaluate((el: any) => (el as HTMLElement).click()).catch(() => {});
+      console.log('[SafariSelectVehicleSpecs] Clicked "Seller" / "Owner" button. Waiting 1.5s for Dropdown screen...');
+      await page.waitForTimeout(1500);
     } else {
-      console.log('[SafariSelectVehicleSpecs] "Owner" pop-up not present or skipped.');
+      console.log('[SafariSelectVehicleSpecs] Step 2: "Seller" / "Owner" pop-up not present or skipped.');
     }
 
-    // 4. Select Year
+    // 3. Step 3: Dropdown Selection Screen (Year -> Make -> Model -> Trim -> Get Records)
+    console.log('[SafariSelectVehicleSpecs] Step 3: Selecting vehicle specifications from dropdowns...');
+
+    // Select Year (1st combobox)
     console.log(`[SafariSelectVehicleSpecs] Selecting Year "${year}"...`);
-    await page.getByRole('combobox').filter({ hasText: 'Year' }).click();
-    await page.getByRole('button', { name: year }).click();
+    const yearCombobox = page.getByRole('combobox').first();
+    await yearCombobox.waitFor({ state: 'visible', timeout: 10000 });
+    await yearCombobox.click({ force: true }).catch(async () => await yearCombobox.click());
+    
+    const yearBtn = page.getByRole('button', { name: year })
+      .or(page.getByText(year, { exact: true }))
+      .first();
+    await yearBtn.click({ force: true }).catch(async () => await yearBtn.click());
 
-    // 5. Select Make
+    // Select Make (2nd combobox)
     console.log(`[SafariSelectVehicleSpecs] Selecting Make "${brand}"...`);
-    await page.getByRole('combobox').filter({ hasText: 'Make' }).click();
-    await page.getByRole('button', { name: brand }).click();
+    const makeCombobox = page.getByRole('combobox').filter({ hasText: 'Make' })
+      .or(page.getByRole('combobox').nth(1))
+      .first();
+    await makeCombobox.click({ force: true }).catch(async () => await makeCombobox.click());
+    
+    const brandBtn = page.getByRole('button', { name: brand })
+      .or(page.getByText(brand, { exact: true }))
+      .first();
+    await brandBtn.click({ force: true }).catch(async () => await brandBtn.click());
 
-    // 6. Select Model
+    // Select Model (3rd combobox)
     console.log(`[SafariSelectVehicleSpecs] Selecting Model "${model}"...`);
-    await page.getByRole('combobox').filter({ hasText: 'Model' }).click();
-    await page.getByRole('button', { name: model }).click();
+    const modelCombobox = page.getByRole('combobox').filter({ hasText: 'Model' })
+      .or(page.getByRole('combobox').nth(2))
+      .first();
+    await modelCombobox.click({ force: true }).catch(async () => await modelCombobox.click());
+    
+    const modelBtn = page.getByRole('button', { name: model })
+      .or(page.getByText(model, { exact: true }))
+      .first();
+    await modelBtn.click({ force: true }).catch(async () => await modelBtn.click());
 
-    // 7. Select Trim
+    // Select Trim (4th combobox)
     if (version) {
       console.log(`[SafariSelectVehicleSpecs] Selecting Trim "${version}"...`);
-      await page.getByRole('combobox').filter({ hasText: 'Trim' }).click();
-      await page.getByRole('button', { name: version }).click();
+      const trimCombobox = page.getByRole('combobox').filter({ hasText: 'Trim' })
+        .or(page.getByRole('combobox').nth(3))
+        .first();
+      if (await trimCombobox.isVisible().catch(() => false)) {
+        await trimCombobox.click({ force: true }).catch(async () => await trimCombobox.click());
+        
+        const versionBtn = page.getByRole('button', { name: version })
+          .or(page.getByText(version, { exact: true }))
+          .first();
+        await versionBtn.click({ force: true }).catch(async () => await versionBtn.click());
+      }
     }
 
-    // 8. Click Get Records button
-    console.log('[SafariSelectVehicleSpecs] Clicking "Get Records"...');
-    await page.getByRole('button', { name: 'Get Records' })
+    // Submit: Click "Get Records"
+    console.log('[SafariSelectVehicleSpecs] Submitting form: Clicking "Get Records"...');
+    const getRecordsBtn = page.getByRole('button', { name: 'Get Records' })
       .or(page.getByRole('button', { name: /Get Records/i }))
-      .first()
-      .click();
+      .first();
+    await getRecordsBtn.click({ force: true }).catch(async () => await getRecordsBtn.click());
     console.log('[SafariSelectVehicleSpecs] Clicked "Get Records" successfully.');
   }
 }
@@ -290,5 +324,3 @@ export class NavigateToPreviewWithVin implements Task {
     await actor.page.goto(previewUrl);
   }
 }
-
-

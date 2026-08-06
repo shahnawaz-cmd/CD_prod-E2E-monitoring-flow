@@ -16,8 +16,8 @@ function generateRandomVin(): string {
 // Base VIN for mapped generator
 const BASE_MAPPED_VIN = '242370B111346';
 
-// Base VIN for unmapped generator
-const BASE_UNMAPPED_VIN = 'RWDS0';
+// Base VIN for unmapped generator (reverted to 111111111111)
+const BASE_UNMAPPED_VIN = '111111111111';
 
 // Class 1: Mapped VIN Generator
 // Returns a VIN using the base VIN and randomizing the last numeric digit
@@ -47,7 +47,7 @@ export class MappedVinGenerator implements Task {
 }
 
 // Class 2: Unmapped VIN Generator
-// Generates an unmapped VIN using the base VIN and randomizing the last character with an alphabet letter
+// Generates an unmapped VIN using base VIN (111111111111) and randomizing the last character with an alphabet letter
 export class UnmappedVinGenerator implements Task {
   private constructor(private readonly targetInputSelector?: string) {}
 
@@ -57,7 +57,7 @@ export class UnmappedVinGenerator implements Task {
 
   // Helper method to generate a new unmapped VIN (replaces the last character with a random letter A-Z)
   static getVin(): string {
-    const base = BASE_UNMAPPED_VIN.slice(0, -1); // "RWDS"
+    const base = BASE_UNMAPPED_VIN.slice(0, -1);
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
     return base + randomLetter;

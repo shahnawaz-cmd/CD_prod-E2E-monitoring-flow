@@ -2,10 +2,12 @@ import { test } from '@playwright/test';
 import { Actor } from '../src/actors/Actor';
 import { MappedVinGenerator, UnmappedVinGenerator } from '../src/tasks/GenerateVIN';
 import { SelectVehicleSpecs, SafariSelectVehicleSpecs, PreviewVehicleDetail, NavigateToPreviewWithVin } from '../src/tasks/DecodeVIN';
-import { CaptureDecodeApiResponse, CaptureUpdateDecodeApiResponse } from '../src/tasks/CaptureDecodeApi';
+import { CaptureDecodeApiResponse, CaptureUpdateDecodeApiResponse, CaptureGarageApiResponse } from '../src/tasks/CaptureDecodeApi';
 import { EmailGenerator } from '../src/tasks/GenerateEmail';
+import { PasswordGenerator, PhoneGenerator } from '../src/tasks/GenerateCredentials';
 import { VHRPreviewToCheckout, BuildSheetPreviewToCheckout } from '../src/tasks/PreviewToCheckout';
 import { EditVehicleSpecsOnPreview } from '../src/tasks/EditVehicleSpecs';
+import { AddToGarageWithSignup, AddToGarageWithLogin } from '../src/tasks/AddToGarage';
 
 test.describe('Classic Decoder VIN Flows', () => {
   // Set suite timeout to 3 minutes (180s) to handle unmapped VIN decode calls (up to 2 mins)
@@ -145,9 +147,78 @@ test.describe('Classic Decoder VIN Flows', () => {
     await apiPromise;
   });
 
+  test('TC_06: Add to Garage Flow with Signup Verification', async ({ page }) => {
+    const client = Actor.named('Customer', page);
+
+    const mappedVin = MappedVinGenerator.getVin();
+    console.log(`[Test TC_06] Generated dynamic mapped VIN: ${mappedVin}`);
+
+    // 1. Start listening for '/api/garage' request payload & response in parallel (30s timeout)
+    const garageApiCapture = CaptureGarageApiResponse.withTimeout(30_000);
+    const garageApiPromise = client.attemptsTo(garageApiCapture);
+
+    // 2. VIN decode via URL (land on Preview page)
+    await client.attemptsTo(
+      new NavigateToPreviewWithVin(mappedVin)
+    );
+
+    // 3. Perform Add to Garage with Signup flow (clicks Add to Garage, fills unique signup credentials, lands on /members/my-garage)
+    await client.attemptsTo(
+      AddToGarageWithSignup.withCredentials({}, 30_000)
+    );
+
+    await garageApiPromise;
+  });
+
+  test('TC_07: Add to Garage Flow with Existing User Login Verification', async ({ page }) => {
+    const client = Actor.named('Customer', page);
+
+    const mappedVin = MappedVinGenerator.getVin();
+    const dynamicEmail = EmailGenerator.generate('instant.vinreport22@gmail.com');
+    const dynamicPassword = PasswordGenerator.generate('Pass321654');
+    const dynamicPhone = PhoneGenerator.generate('0315');
+
+    console.log(`[Test TC_07] Generated dynamic VIN: ${mappedVin}`);
+    console.log(`[Test TC_07] Registering credentials - Email: "${dynamicEmail}", Password: "${dynamicPassword}"`);
+
+    // 1. Step 1: Register account via Add to Garage Signup flow
+    await client.attemptsTo(
+      new NavigateToPreviewWithVin(mappedVin)
+    );
+
+    await client.attemptsTo(
+      AddToGarageWithSignup.withCredentials({
+        email: dynamicEmail,
+        password: dynamicPassword,
+        phone: dynamicPhone
+      }, 30_000)
+    );
+
+    // 2. Step 2: Clear cookies to log out and simulate returning user
+    console.log('[Test TC_07] Clearing cookies to log out user...');
+    await page.context().clearCookies();
+
+    // 3. Step 3: Start listening for '/api/garage' during login flow & re-navigate to Preview page
+    console.log('[Test TC_07] Testing Existing User Login flow...');
+
+    const garageApiCapture = CaptureGarageApiResponse.withTimeout(30_000);
+    const garageApiPromise = client.attemptsTo(garageApiCapture);
+
+    await client.attemptsTo(
+      new NavigateToPreviewWithVin(mappedVin)
+    );
+
+    await client.attemptsTo(
+      AddToGarageWithLogin.withCredentials({
+        email: dynamicEmail,
+        password: dynamicPassword
+      }, 30_000)
+    );
+
+    await garageApiPromise;
+  });
+
 });
-
-
 
 
 

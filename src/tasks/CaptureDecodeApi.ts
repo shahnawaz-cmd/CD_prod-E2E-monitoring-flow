@@ -81,3 +81,62 @@ export class CaptureUpdateDecodeApiResponse implements Task {
     return this.capturedJson;
   }
 }
+
+/**
+ * Task: CaptureGarageApiResponse
+ * Listens for and captures the '/api/garage' API request payload (postData)
+ * and JSON response when a vehicle is added to garage via Signup or Login.
+ */
+export class CaptureGarageApiResponse implements Task {
+  private capturedPayload: any = null;
+  private capturedResponse: any = null;
+
+  constructor(private readonly timeoutMs: number = 30_000) {}
+
+  static withTimeout(timeoutMs: number = 30_000): CaptureGarageApiResponse {
+    return new CaptureGarageApiResponse(timeoutMs);
+  }
+
+  async performAs(actor: Actor): Promise<void> {
+    const page = actor.page;
+    console.log(`[CaptureGarageApiResponse] Waiting for '/api/garage' API request & response (Timeout: ${this.timeoutMs / 1000}s)...`);
+
+    try {
+      const response: Response = await page.waitForResponse(
+        (res) => res.url().includes('/api/garage'),
+        { timeout: this.timeoutMs }
+      );
+
+      const request = response.request();
+      const status = response.status();
+
+      // 1. Capture Request Payload
+      const postData = request.postData();
+      try {
+        this.capturedPayload = postData ? JSON.parse(postData) : postData;
+      } catch (e) {
+        this.capturedPayload = postData;
+      }
+
+      // 2. Capture Response JSON
+      this.capturedResponse = await response.json().catch(() => null);
+
+      console.log(`\n=== [/api/garage Request Payload & JSON Response Captured (Status: ${status})] ===\n`);
+      console.log('--- Request Payload ---');
+      console.log(JSON.stringify(this.capturedPayload, null, 2));
+      console.log('--- Response JSON ---');
+      console.log(JSON.stringify(this.capturedResponse, null, 2));
+      console.log(`\n===================================================================================\n`);
+    } catch (err) {
+      console.log(`[CaptureGarageApiResponse] Warning: /api/garage API request/response not captured within ${this.timeoutMs / 1000}s.`);
+    }
+  }
+
+  getCapturedPayload(): any {
+    return this.capturedPayload;
+  }
+
+  getCapturedResponse(): any {
+    return this.capturedResponse;
+  }
+}

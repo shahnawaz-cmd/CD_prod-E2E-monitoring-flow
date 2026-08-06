@@ -12,9 +12,14 @@ on:
 
 jobs:
   test:
-    name: Playwright E2E Tests (Mobile Safari iOS 18)
-    timeout-minutes: 15
+    name: Playwright Matrix - ${{ matrix.project }}
+    timeout-minutes: 120
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ['Mobile Safari (iOS 18)', 'Desktop Chrome', 'Mobile Chrome (Android)']
 
     env:
       CI: true
@@ -32,7 +37,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Cache Playwright WebKit Browser Binary
+      - name: Cache Playwright Binaries
         uses: actions/cache@v4
         id: playwright-cache
         with:
@@ -41,29 +46,68 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
-      - name: Install Playwright WebKit Browser & Dependencies (on Cache Miss)
+      - name: Install Playwright Browsers & OS Dependencies (on Cache Miss)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install webkit --with-deps
+        run: npx playwright install --with-deps
 
       - name: Install System OS Dependencies Only (on Cache Hit)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps webkit
+        run: npx playwright install-deps
 
-      - name: Execute Playwright E2E Monitoring Suite
-        run: npx playwright test
+      - name: Execute Playwright Matrix Project Tests (Continue On Error)
+        id: playwright-test
+        continue-on-error: true
+        run: npx playwright test --project="${{ matrix.project }}" --reporter=blob
 
-      - name: Upload HTML Test Report Artifact
+      - name: Upload Blob Report Artifact
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: blob-report-${{ matrix.project }}
+          path: blob-report/
           retention-days: 30
 
       - name: Upload Test Results & Failure Artifacts (Screenshots & Traces)
         uses: actions/upload-artifact@v4
-        if: failure()
+        if: ${{ !cancelled() }}
         with:
-          name: test-results
+          name: test-results-${{ matrix.project }}
           path: test-results/
+          retention-days: 30
+
+  consolidate-report:
+    name: Consolidate Playwright Matrix HTML Report
+    needs: test
+    if: ${{ !cancelled() }}
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Download All Blob Report Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge Matrix Blob Reports into Consolidated HTML Report
+        run: npx playwright merge-reports ./all-blob-reports --reporter html
+
+      - name: Upload Consolidated Playwright HTML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-playwright-report
+          path: playwright-report/
           retention-days: 30
