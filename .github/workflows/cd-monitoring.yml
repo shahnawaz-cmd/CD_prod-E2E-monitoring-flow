@@ -37,22 +37,8 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Cache Playwright Binaries
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      - name: Install Playwright Browsers & OS Dependencies (on Cache Miss)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - name: Install Playwright Browsers & OS Dependencies
         run: npx playwright install --with-deps
-
-      - name: Install System OS Dependencies Only (on Cache Hit)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps
 
       - name: Execute Playwright Matrix Project Tests (Continue On Error)
         id: playwright-test
