@@ -13,17 +13,14 @@ function generateRandomVin(): string {
   return vin;
 }
 
-// Base VIN pool for Classic Decoder (CD) mapped generator
-export const CD_MAPPED_VIN_POOL = [
-  '2W87W5N577375',
-  '242370B111346'
-];
+// Base VIN for mapped generator
+const BASE_MAPPED_VIN = '242370B111346';
 
 // Base VIN for unmapped generator (reverted to 111111111111)
 const BASE_UNMAPPED_VIN = '111111111111';
 
 // Class 1: Mapped VIN Generator
-// Returns a VIN using the base VIN pool and randomizing the last numeric digit
+// Returns a VIN using the base VIN and randomizing the last numeric digit
 export class MappedVinGenerator implements Task {
   private constructor(private readonly targetInputSelector?: string) {}
 
@@ -31,10 +28,9 @@ export class MappedVinGenerator implements Task {
     return new MappedVinGenerator(selector);
   }
 
-  // Helper method to retrieve a mapped VIN (picks from CD_MAPPED_VIN_POOL and replaces the last character with a random digit 0-9)
+  // Helper method to retrieve a mapped VIN (replaces the last character with a random digit 0-9)
   static getVin(): string {
-    const baseVin = CD_MAPPED_VIN_POOL[Math.floor(Math.random() * CD_MAPPED_VIN_POOL.length)];
-    const base = baseVin.slice(0, -1);
+    const base = BASE_MAPPED_VIN.slice(0, -1); // "242370B11134"
     const randomDigit = Math.floor(Math.random() * 10).toString(); // "0"-"9"
     return base + randomDigit;
   }
