@@ -1,4 +1,17 @@
+declare const process: any;
+
 export const CLASSIC_DECODER_URL = 'https://classicdecoder.com/';
+export const DEFAULT_API_TIMEOUT_MS = 120_000;
+
+/**
+ * Returns the dynamic API timeout in milliseconds.
+ * Configurable via process.env.API_TIMEOUT_MS, defaulting to 120s for slow decodes.
+ */
+export function getApiTimeoutMs(): number {
+  return typeof process !== 'undefined' && process.env?.API_TIMEOUT_MS
+    ? parseInt(process.env.API_TIMEOUT_MS, 10)
+    : DEFAULT_API_TIMEOUT_MS;
+}
 
 /**
  * Returns the base Classic Decoder URL.

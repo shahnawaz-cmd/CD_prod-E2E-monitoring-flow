@@ -1,10 +1,10 @@
 import { Actor } from '../actors/Actor';
 import { Task } from './Task';
 import { expect, Locator } from '@playwright/test';
+import { SelfHealing } from '../utils/SelfHealing';
 
 /**
  * Base Abstract Task for Preview to Checkout Redirection
- * Replicates the clean PreloaderBase logic from pintonaturals_checkout.spec.js
  */
 export abstract class BasePreviewToCheckout implements Task {
   constructor(
@@ -12,50 +12,36 @@ export abstract class BasePreviewToCheckout implements Task {
     protected readonly timeoutMs: number = 60_000
   ) {}
 
-  /**
-   * Abstract method to retrieve the Access Button locator for VHR or BuildSheet
-   */
   protected abstract getAccessButton(actor: Actor): Locator;
 
-  /**
-   * Executes performPreloaderCheck and trackPreloaderToCheckoutTime
-   */
   async performAs(actor: Actor): Promise<void> {
     const page = actor.page;
     console.log(`[PreviewToCheckout] Starting Preloader check for email: "${this.email}"`);
 
-    // 1. Wait for the specific button to be visible & interactive
+    // 1. Click Access Button using SelfHealing
     const accessButton = this.getAccessButton(actor);
-    console.log('[PreviewToCheckout] Waiting for Access button to be visible (timeout: 30s)...');
-    await accessButton.waitFor({ state: 'visible', timeout: 30000 });
-    await accessButton.click();
-    console.log('[PreviewToCheckout] Clicked Access button.');
+    console.log('[PreviewToCheckout] Waiting for Access button...');
+    await SelfHealing.click(accessButton, 'Access Vehicle Report/Sticker button', 30_000);
 
-    // 2. Wait for email popup modal and fill email
-    console.log('[PreviewToCheckout] Waiting for Email input popup...');
+    // 2. Fill Email using SelfHealing
+    console.log('[PreviewToCheckout] Filling Email in popup...');
     const emailInput = page.getByRole('textbox', { name: /Email Address/i })
       .or(page.locator('input[type="email"], input[name*="email"], input[placeholder*="email"]'))
       .first();
 
-    await expect(emailInput).toBeVisible({ timeout: 15000 });
-    await emailInput.fill(this.email);
-    console.log(`[PreviewToCheckout] Filled email: ${this.email}`);
+    await SelfHealing.fill(emailInput, this.email, 'Email Address input', 15_000);
 
-    // 3. Click Proceed to Checkout button
+    // 3. Click Proceed to Checkout button using SelfHealing
     const checkoutButton = page.getByRole('button', { name: /Proceed to Checkout/i })
       .or(page.locator('button, [role="button"]').filter({ hasText: /Proceed to Checkout|Checkout/i }))
       .first();
 
-    await checkoutButton.click();
-    console.log('[PreviewToCheckout] Clicked "Proceed to Checkout" button.');
+    await SelfHealing.click(checkoutButton, 'Proceed to Checkout button');
 
     // 4. Track Preloader timing to Checkout
     await this.trackPreloaderToCheckoutTime(actor);
   }
 
-  /**
-   * Tracks timing from preloader visibility to checkout header visibility and asserts URL redirect
-   */
   protected async trackPreloaderToCheckoutTime(actor: Actor): Promise<number> {
     const page = actor.page;
     const preloader = page.locator('text=Preparing Your Checkout')

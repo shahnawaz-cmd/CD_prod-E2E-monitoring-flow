@@ -1,7 +1,9 @@
 import { test } from '@playwright/test';
 import { Actor } from '../src/actors/Actor';
 import { MappedVinGenerator, UnmappedVinGenerator } from '../src/tasks/GenerateVIN';
-import { SelectVehicleSpecs, SafariSelectVehicleSpecs, PreviewVehicleDetail, NavigateToPreviewWithVin } from '../src/tasks/DecodeVIN';
+import { NavigateToPreviewWithVin } from '../src/tasks/DecodeVIN';
+import { DecodeDirectMappedVIN } from '../src/tasks/DecodeDirectMappedVIN';
+import { DecodeUnmappedVIN } from '../src/tasks/DecodeUnmappedVIN';
 import { CaptureDecodeApiResponse, CaptureUpdateDecodeApiResponse, CaptureGarageApiResponse } from '../src/tasks/CaptureDecodeApi';
 import { EmailGenerator } from '../src/tasks/GenerateEmail';
 import { PasswordGenerator, PhoneGenerator } from '../src/tasks/GenerateCredentials';
@@ -17,23 +19,21 @@ test.describe('Classic Decoder VIN Flows', () => {
     const client = Actor.named('Customer', page);
 
     const mappedVin = MappedVinGenerator.getVin();
-    console.log(`[Test] Mapped VIN generated for run: ${mappedVin}`);
+    console.log(`[Test TC_01] Mapped VIN generated for run: ${mappedVin}`);
 
-    // 1. Start capturing /api/classic/decode JSON response in parallel (2-min condition timeout)
-    const apiCaptureTask = CaptureDecodeApiResponse.withTimeout(120_000);
+    // 1. Start capturing /api/classic/decode JSON response in parallel
+    const apiCaptureTask = new CaptureDecodeApiResponse();
     const apiPromise = client.attemptsTo(apiCaptureTask);
 
-    // 2. Navigate directly to preview URL with dynamic VIN
+    // 2. Navigate to preview URL with dynamic VIN
     await client.attemptsTo(
-      new NavigateToPreviewWithVin(mappedVin)
+      NavigateToPreviewWithVin.forUnmapped(mappedVin)
     );
 
     await apiPromise;
 
-    // 3. Extract and verify details on preview page
-    await client.attemptsTo(
-      new PreviewVehicleDetail()
-    );
+    // 3. Perform Mapped Decode Task (Direct Preview + Automatic Fallback for Yes -> Role -> Preview)
+    await client.attemptsTo(new DecodeDirectMappedVIN());
   });
 
   test('TC_02: Decode Unmapped VIN (Safari Flow)', async ({ page }) => {
@@ -42,45 +42,19 @@ test.describe('Classic Decoder VIN Flows', () => {
     const unmappedVin = UnmappedVinGenerator.getVin();
     console.log(`[Test TC_02] Unmapped VIN generated for run: ${unmappedVin}`);
 
-    // 1. Start capturing /api/classic/decode JSON response in parallel (30s timeout)
-    const apiCaptureTask = CaptureDecodeApiResponse.withTimeout(30_000);
+    // 1. Start capturing /api/classic/decode JSON response in parallel
+    const apiCaptureTask = new CaptureDecodeApiResponse();
     const apiPromise = client.attemptsTo(apiCaptureTask);
 
-    // 2. Navigate directly to preview URL with unmapped dynamic VIN
+    // 2. Navigate to preview URL with unmapped dynamic VIN (disables auto-yes confirmation)
     await client.attemptsTo(
-      new NavigateToPreviewWithVin(unmappedVin)
+      NavigateToPreviewWithVin.forUnmapped(unmappedVin)
     );
 
     await apiPromise;
 
-    // 3. Unmapped VIN Flow: Wait up to 20 seconds for "Select Your Preferred Vehicle" screen / comboboxes
-    console.log('[Test TC_02] Waiting up to 20s for "Select Your Preferred Vehicle" screen or comboboxes...');
-
-    const selectionScreenLocator = page.getByRole('heading', { name: /Select Your Preferred Vehicle/i })
-      .or(page.locator('text=/Select Your Preferred Vehicle/i'))
-      .or(page.getByRole('combobox'))
-      .first();
-
-    const isSelectionScreenPresent = await selectionScreenLocator.waitFor({ state: 'visible', timeout: 20_000 })
-      .then(() => true)
-      .catch(() => false);
-
-    if (isSelectionScreenPresent) {
-      console.log('[Test TC_02] "Select Your Preferred Vehicle" screen detected! Executing SafariSelectVehicleSpecs...');
-      await client.attemptsTo(
-        new SafariSelectVehicleSpecs({
-          year: '1936',
-          brand: 'Oldsmobile',
-          model: 'L-Series Eight',
-          version: 'Business Coupe'
-        })
-      );
-    } else {
-      console.log('[Test TC_02] 20s wait completed without dropdown form. Proceeding with last fallback (PreviewVehicleDetail)...');
-      await client.attemptsTo(
-        new PreviewVehicleDetail()
-      );
-    }
+    // 3. Perform Unmapped Decode Task (1st Tier: No -> Role -> YMMT Dropdowns -> Preview | Fallback: Direct Preview)
+    await client.attemptsTo(new DecodeUnmappedVIN());
   });
 
   test('TC_03: Preview to Checkout Redirection Verification (VHR)', async ({ page }) => {
@@ -129,8 +103,8 @@ test.describe('Classic Decoder VIN Flows', () => {
     const mappedVin = MappedVinGenerator.getVin();
     console.log(`[Test TC_05] Generated dynamic mapped VIN: ${mappedVin}`);
 
-    // 1. Start listening for 'update-classic-decode' POST API response in parallel (30s condition timeout)
-    const apiUpdateCaptureTask = CaptureUpdateDecodeApiResponse.withTimeout(30_000);
+    // 1. Start listening for 'update-classic-decode' POST API response in parallel
+    const apiUpdateCaptureTask = new CaptureUpdateDecodeApiResponse();
     const apiPromise = client.attemptsTo(apiUpdateCaptureTask);
 
     // 2. Navigate directly to preview URL with dynamic mapped VIN
@@ -138,9 +112,9 @@ test.describe('Classic Decoder VIN Flows', () => {
       new NavigateToPreviewWithVin(mappedVin)
     );
 
-    // 3. Perform Edit Vehicle Specs task on Preview page with condition timeout
+    // 3. Perform Edit Vehicle Specs task on Preview page
     await client.attemptsTo(
-      EditVehicleSpecsOnPreview.withYMM('1966', 'Aermacchi', 'ALA Verde Serie 1', 'Base', 30_000)
+      EditVehicleSpecsOnPreview.withYMM('1966', 'Aermacchi', 'ALA Verde Serie 1', 'Base')
     );
 
     // 4. Await update-classic-decode POST API response capture
@@ -153,8 +127,8 @@ test.describe('Classic Decoder VIN Flows', () => {
     const mappedVin = MappedVinGenerator.getVin();
     console.log(`[Test TC_06] Generated dynamic mapped VIN: ${mappedVin}`);
 
-    // 1. Start listening for '/api/garage' request payload & response in parallel (30s timeout)
-    const garageApiCapture = CaptureGarageApiResponse.withTimeout(30_000);
+    // 1. Start listening for '/api/garage' request payload & response in parallel
+    const garageApiCapture = new CaptureGarageApiResponse();
     const garageApiPromise = client.attemptsTo(garageApiCapture);
 
     // 2. VIN decode via URL (land on Preview page)
@@ -164,7 +138,7 @@ test.describe('Classic Decoder VIN Flows', () => {
 
     // 3. Perform Add to Garage with Signup flow (clicks Add to Garage, fills unique signup credentials, lands on /members/my-garage)
     await client.attemptsTo(
-      AddToGarageWithSignup.withCredentials({}, 30_000)
+      AddToGarageWithSignup.withCredentials({})
     );
 
     await garageApiPromise;
@@ -191,7 +165,7 @@ test.describe('Classic Decoder VIN Flows', () => {
         email: dynamicEmail,
         password: dynamicPassword,
         phone: dynamicPhone
-      }, 30_000)
+      })
     );
 
     // 2. Step 2: Clear cookies to log out and simulate returning user
@@ -201,7 +175,7 @@ test.describe('Classic Decoder VIN Flows', () => {
     // 3. Step 3: Start listening for '/api/garage' during login flow & re-navigate to Preview page
     console.log('[Test TC_07] Testing Existing User Login flow...');
 
-    const garageApiCapture = CaptureGarageApiResponse.withTimeout(30_000);
+    const garageApiCapture = new CaptureGarageApiResponse();
     const garageApiPromise = client.attemptsTo(garageApiCapture);
 
     await client.attemptsTo(
@@ -212,15 +186,10 @@ test.describe('Classic Decoder VIN Flows', () => {
       AddToGarageWithLogin.withCredentials({
         email: dynamicEmail,
         password: dynamicPassword
-      }, 30_000)
+      })
     );
 
     await garageApiPromise;
   });
 
 });
-
-
-
-
-

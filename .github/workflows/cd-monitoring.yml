@@ -1,13 +1,8 @@
 name: Classic Decoder E2E Monitoring Flow
 
 on:
-  push:
-    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  schedule:
-    # Run automatically every 6 hours for continuous monitoring
-    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:

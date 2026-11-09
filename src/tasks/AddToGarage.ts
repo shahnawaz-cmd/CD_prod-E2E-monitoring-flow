@@ -2,6 +2,7 @@ import { Actor } from '../actors/Actor';
 import { Task } from './Task';
 import { EmailGenerator } from './GenerateEmail';
 import { PasswordGenerator, PhoneGenerator } from './GenerateCredentials';
+import { SelfHealing } from '../utils/SelfHealing';
 
 export interface GarageSignupCredentials {
   email?: string;
@@ -16,7 +17,7 @@ export interface GarageLoginCredentials {
 
 /**
  * Task: AddToGarageWithSignup
- * Performs the 'Add to garage' signup flow on the Preview page using the exact simple locator sequence provided.
+ * Performs the 'Add to garage' signup flow on the Preview page using self-healing interactions.
  */
 export class AddToGarageWithSignup implements Task {
   constructor(
@@ -38,61 +39,42 @@ export class AddToGarageWithSignup implements Task {
     const password = this.credentials.password || PasswordGenerator.generate('321654');
     const phone = this.credentials.phone || PhoneGenerator.generate('0315');
 
-    console.log(`[AddToGarageWithSignup] Executing signup flow with unique data (Email: "${email}", Password: "${password}", Phone: "${phone}")...`);
+    console.log(`[AddToGarageWithSignup] Executing signup flow (Email: "${email}", Phone: "${phone}")...`);
 
     // Wait for JS hydration
     await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
 
     const addToGarageBtn = page.locator('header button', { hasText: 'Add to garage' })
       .or(page.locator('header').getByRole('button', { name: 'Add to garage' }))
       .or(page.getByRole('button', { name: 'Add to garage' }))
       .first();
 
-    await addToGarageBtn.waitFor({ state: 'visible', timeout: this.timeoutMs });
-    await addToGarageBtn.click({ force: true }).catch(async () => {
-      await addToGarageBtn.click();
-    });
+    await SelfHealing.click(addToGarageBtn, 'Add to garage button', this.timeoutMs);
 
     const signupBtn = page.getByRole('button', { name: 'Signup' })
       .or(page.locator('button, [role="button"], a, span, div').filter({ hasText: /^Signup$/i }))
       .first();
 
-    const isModalOpen = await signupBtn.waitFor({ state: 'visible', timeout: 3000 })
-      .then(() => true)
-      .catch(() => false);
+    await SelfHealing.click(signupBtn, 'Signup tab button', 5000);
 
-    if (!isModalOpen) {
-      await addToGarageBtn.evaluate((el: any) => (el as HTMLElement).click());
-      await page.waitForTimeout(1000);
-    }
+    // Resilient input fills
+    await SelfHealing.fill(page.getByRole('textbox', { name: 'Email' }).first(), email, 'Email input');
+    await SelfHealing.fill(page.getByRole('textbox', { name: 'Password', exact: true }).first(), password, 'Password input');
+    await SelfHealing.fill(page.getByRole('textbox', { name: 'Confirm Password' }).first(), password, 'Confirm Password input');
+    await SelfHealing.fill(page.getByRole('textbox', { name: 'Phone' }).first(), phone, 'Phone input');
 
-    await signupBtn.click({ force: true }).catch(async () => {
-      await signupBtn.click();
-    });
-
-    await page.getByRole('textbox', { name: 'Email' }).click();
-    await page.getByRole('textbox', { name: 'Email' }).fill(email);
-
-    await page.getByRole('textbox', { name: 'Password', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Password', exact: true }).fill(password);
-
-    await page.getByRole('textbox', { name: 'Confirm Password' }).click();
-    await page.getByRole('textbox', { name: 'Confirm Password' }).fill(password);
-
-    await page.getByRole('textbox', { name: 'Phone' }).click();
-    await page.getByRole('textbox', { name: 'Phone' }).fill(phone);
-
-    await page.getByRole('button', { name: 'Signup' }).click();
+    const submitSignupBtn = page.getByRole('button', { name: 'Signup' }).first();
+    await SelfHealing.click(submitSignupBtn, 'Submit Signup button');
 
     await page.goto('https://classicdecoder.com/members/my-garage');
-    console.log(`[AddToGarageWithSignup] Successfully executed page.goto('https://classicdecoder.com/members/my-garage'). Current URL: ${page.url()}`);
+    console.log(`[AddToGarageWithSignup] Successfully landed on My Garage: ${page.url()}`);
   }
 }
 
 /**
  * Task: AddToGarageWithLogin
- * Performs the 'Add to garage' login flow on the Preview page for existing users with 2s JS hydration wait and JS click guard.
+ * Performs the 'Add to garage' login flow on the Preview page for existing users with self-healing interactions.
  */
 export class AddToGarageWithLogin implements Task {
   constructor(
@@ -113,12 +95,11 @@ export class AddToGarageWithLogin implements Task {
     const email = this.credentials.email || 'instant.vinreport22@gmail.com';
     const password = this.credentials.password || '321654';
 
-    console.log(`[AddToGarageWithLogin] Executing Add to Garage login flow for existing user (Email: "${email}")...`);
+    console.log(`[AddToGarageWithLogin] Executing Add to Garage login flow (Email: "${email}")...`);
 
-    // 1. Wait for JS framework hydration on Preview page landing
-    console.log('[AddToGarageWithLogin] Waiting for JS framework hydration pause (2s)...');
+    // 1. Wait for JS hydration
     await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
 
     // 2. Click "Add to garage" button inside header
     const addToGarageBtn = page.locator('header button', { hasText: 'Add to garage' })
@@ -126,53 +107,25 @@ export class AddToGarageWithLogin implements Task {
       .or(page.getByRole('button', { name: 'Add to garage' }))
       .first();
 
-    await addToGarageBtn.waitFor({ state: 'visible', timeout: this.timeoutMs });
-    await addToGarageBtn.click({ force: true }).catch(async () => {
-      await addToGarageBtn.click();
-    });
+    await SelfHealing.click(addToGarageBtn, 'Add to garage button', this.timeoutMs);
 
-    // Guard: If modal is not open yet, dispatch direct JS DOM click
+    // 3. Click "Login" tab button in modal
     const loginTabBtn = page.getByRole('button', { name: 'Login' })
       .or(page.locator('button, [role="button"], a, span, div').filter({ hasText: /^Login$/i }))
       .first();
 
-    const isModalOpen = await loginTabBtn.waitFor({ state: 'visible', timeout: 3000 })
-      .then(() => true)
-      .catch(() => false);
+    await SelfHealing.click(loginTabBtn, 'Login tab button', 5000);
 
-    if (!isModalOpen) {
-      console.log('[AddToGarageWithLogin] Modal not open yet. Re-dispatching direct JS click on "Add to garage"...');
-      await addToGarageBtn.evaluate((el: any) => (el as HTMLElement).click());
-      await page.waitForTimeout(1000);
-    }
+    // 4. Fill credentials
+    await SelfHealing.fill(page.getByRole('textbox', { name: 'Email' }).first(), email, 'Email input');
+    await SelfHealing.fill(page.getByRole('textbox', { name: 'Password' }).first(), password, 'Password input');
 
-    // 3. Click "Login" button in modal
-    console.log('[AddToGarageWithLogin] Clicking "Login" button in modal...');
-    await loginTabBtn.click({ force: true }).catch(async () => {
-      await loginTabBtn.click();
-    });
-
-    // 4. Fill Email field
-    console.log('[AddToGarageWithLogin] Filling Email...');
-    const emailField = page.getByRole('textbox', { name: 'Email' }).first();
-    await emailField.click();
-    await emailField.fill(email);
-
-    // 5. Fill Password field
-    console.log('[AddToGarageWithLogin] Filling Password...');
-    const passwordField = page.getByRole('textbox', { name: 'Password' }).first();
-    await passwordField.click();
-    await passwordField.fill(password);
-
-    // 6. Click Login submission button
-    console.log('[AddToGarageWithLogin] Submitting Login form...');
+    // 5. Submit Login
     const submitBtn = page.getByRole('button', { name: 'Login' }).first();
-    await submitBtn.click({ force: true }).catch(async () => {
-      await submitBtn.click();
-    });
+    await SelfHealing.click(submitBtn, 'Submit Login button');
 
-    // 7. Navigate to My Garage page
+    // 6. Navigate to My Garage page
     await page.goto('https://classicdecoder.com/members/my-garage');
-    console.log(`[AddToGarageWithLogin] Successfully executed page.goto('https://classicdecoder.com/members/my-garage'). Current URL: ${page.url()}`);
+    console.log(`[AddToGarageWithLogin] Successfully landed on My Garage: ${page.url()}`);
   }
 }

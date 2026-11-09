@@ -1,24 +1,25 @@
 import { Actor } from '../actors/Actor';
 import { Task } from './Task';
 import { Response } from '@playwright/test';
+import { getApiTimeoutMs } from '../config';
 
 /**
  * Task: CaptureDecodeApiResponse
  * Listens for and captures the '/api/classic/decode' JSON API response
- * with a condition-based timeout.
+ * with dynamic API timeout.
  */
 export class CaptureDecodeApiResponse implements Task {
   private capturedJson: any = null;
 
-  constructor(private readonly timeoutMs: number = 120_000) {}
+  constructor(private readonly timeoutMs: number = getApiTimeoutMs()) {}
 
-  static withTimeout(timeoutMs: number = 120_000): CaptureDecodeApiResponse {
+  static withTimeout(timeoutMs: number = getApiTimeoutMs()): CaptureDecodeApiResponse {
     return new CaptureDecodeApiResponse(timeoutMs);
   }
 
   async performAs(actor: Actor): Promise<void> {
     const page = actor.page;
-    console.log(`[CaptureDecodeApiResponse] Waiting for '/api/classic/decode' API response (Timeout: ${this.timeoutMs / 1000}s)...`);
+    console.log(`[CaptureDecodeApiResponse] Waiting for '/api/classic/decode' API response (Dynamic Timeout: ${this.timeoutMs / 1000}s)...`);
 
     try {
       const response: Response = await page.waitForResponse(
@@ -50,15 +51,15 @@ export class CaptureDecodeApiResponse implements Task {
 export class CaptureUpdateDecodeApiResponse implements Task {
   private capturedJson: any = null;
 
-  constructor(private readonly timeoutMs: number = 30_000) {}
+  constructor(private readonly timeoutMs: number = getApiTimeoutMs()) {}
 
-  static withTimeout(timeoutMs: number = 30_000): CaptureUpdateDecodeApiResponse {
+  static withTimeout(timeoutMs: number = getApiTimeoutMs()): CaptureUpdateDecodeApiResponse {
     return new CaptureUpdateDecodeApiResponse(timeoutMs);
   }
 
   async performAs(actor: Actor): Promise<void> {
     const page = actor.page;
-    console.log(`[CaptureUpdateDecodeApiResponse] Waiting for 'update-classic-decode' POST API response (Timeout: ${this.timeoutMs / 1000}s)...`);
+    console.log(`[CaptureUpdateDecodeApiResponse] Waiting for 'update-classic-decode' POST API response (Dynamic Timeout: ${this.timeoutMs / 1000}s)...`);
 
     try {
       const response: Response = await page.waitForResponse(
@@ -91,15 +92,15 @@ export class CaptureGarageApiResponse implements Task {
   private capturedPayload: any = null;
   private capturedResponse: any = null;
 
-  constructor(private readonly timeoutMs: number = 30_000) {}
+  constructor(private readonly timeoutMs: number = getApiTimeoutMs()) {}
 
-  static withTimeout(timeoutMs: number = 30_000): CaptureGarageApiResponse {
+  static withTimeout(timeoutMs: number = getApiTimeoutMs()): CaptureGarageApiResponse {
     return new CaptureGarageApiResponse(timeoutMs);
   }
 
   async performAs(actor: Actor): Promise<void> {
     const page = actor.page;
-    console.log(`[CaptureGarageApiResponse] Waiting for '/api/garage' API request & response (Timeout: ${this.timeoutMs / 1000}s)...`);
+    console.log(`[CaptureGarageApiResponse] Waiting for '/api/garage' API request & response (Dynamic Timeout: ${this.timeoutMs / 1000}s)...`);
 
     try {
       const response: Response = await page.waitForResponse(
